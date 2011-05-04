@@ -12,7 +12,8 @@ There you can use the following command
 {{{
 while true; do cat rc_stats ; sleep 1; clear; done
 }}}
-= Getting all results - PenDrive needed =
+
+= Getting all results (PenDrive needed) =
 For this, you should use a pendrive.
 Start with a USB pendrive that is formatted ext3. 
 
