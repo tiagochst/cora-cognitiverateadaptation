@@ -1,0 +1,94 @@
+#summary Installing Cora.
+
+= Introduction =
+
+We are going to explain how to insert CORA algorithm in your Openwrt custom firmware.
+
+= CORA =
+
+First of all, we should change e create some files, listed above:
+
+== Packages ==
+*Path: (path To Openwrt)/package/mac80211
+
+=== Makefile ===
+Change the following flags to the specified values:
+----
+{{{ 	-D__CONFIG_MAC80211_RC_DEFAULT=cora  }}}
+
+{{{	CONFIG_MAC80211_RC_CORA=y       }}}
+
+{{{	CONFIG_MAC80211_RC_MINSTREL_HT=n  }}}
+----
+
+== Compat Wireless ==
+* Path: (path To Openwrt)/build_dir/(Target System)/compat-wireless-2010-10-19/
+* Example: (path To Openwrt)/build_dir/linux-ar71xx/compat-wireless-2010-10-19/net/mac80211
+
+=== config.mk ===
+Change the following flags to the specified values:
+
+----
+{{{CONFIG_MAC80211_RC_DEFAULT=cora}}}
+
+{{{CONFIG_MAC80211_RC_DEFAULT_CORA=y}}}
+
+{{{CONFIG_COMPAT_MAC80211_RC_DEFAULT=cora}}}
+
+{{{CONFIG_MAC80211_RC_CORA=y}}}
+
+{{{CONFIG_MAC80211_RC_MINSTREL_HT=n}}}
+----
+
+=== Mac80211 directory ===
+* Path: (path To Openwrt)/build_dir/(Target System)/compat-wireless-2010-10-19/net/mac80211
+
+* Example: (path To Openwrt)/build_dir/linux-ar71xx/compat-wireless-2010-10-19/net/mac80211
+
+The files to be inserted and chaged are in our repository, you can just copy then to the mac80211 directory.
+
+= Compiling =
+* Path: (path To Openwrt)
+To compile only the package containing CORA just do:
+{{{make package/mac80211/compile V=99}}}
+
+The output can be foun in the following path:
+* Path: (path To Openwrt)/bin/(Target System)/packages
+
+Compiling Mac80211 generate the following ipkg:
+
+----
+{{{ kmod-cfg80211}}}
+
+{{{kmod-mac80211}}}
+
+{{{kmod-athº}}}   
+
+{{{kmod-ath5kº}}} 
+
+{{{kmod-ath9kº}}} 
+
+{{{kmod-b43º}}} 
+
+º(Depends on your wireless card and OpenWrt Configuration)  
+
+----
+
+*Our example created:
+
+----
+kmod-cfg80211_2.6.32.25+2010-10-19-1_ar71xx.pkg
+
+kmod-mac80211_2.6.32.25+2010-10-19-1_ar71xx.pkg
+
+kmod-ath5k_2.6.32.25+2010-10-19-1_ar71xx.ipk
+
+kmod-ath_2.6.32.25+2010-10-19-1_ar71xx.ipkg
+----
+
+
+= Installing =
+Copy the ipkgs created to your router and install using:
+{{{ opkg install "package"}}}
+Reboot your router. 
+Be careful! If something went wrong, your router will be Unreachable!
