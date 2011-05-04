@@ -1,0 +1,49 @@
+#summary Building OpenWRT.
+
+= Introduction =
+
+We are going to explain how to build an Openwrt custom firmware to use CORA algorithm.
+
+
+= Step by Step =
+
+== Obtaining OpenWRT ==
+First of all, make a checkout of OpenWRT repository (Backfire 10.03.1-rc4 -  revision 24045).
+{{{
+svn checkout --revision=24045 svn://svn.openwrt.org/openwrt/branches/backfire/ ./build_dir
+}}}
+
+Secondly, update and install the pakages to same version (revision 24045)
+To do that:
+
+ *copy feeds.conf.default in ./build_dir to feeds.conf 
+ *Add "@24045" at the end of the line that checks out the package feed:
+ It should look like this:
+ {{{
+    src-svn packages svn://svn.openwrt.org/openwrt/packages@24045
+ }}}
+* Update packages doing:
+  {{{
+   ./scripts/feeds update -a
+   }}}
+* Install the packages doing:
+  {{{
+    ./scripts/feeds install -a
+  }}}
+
+
+== Configuring OpenWRT ==
+To access openwrt configuration do:
+   {{{
+    make menuconfig
+   }}}
+Be careful!! You should use an appropriate configuration for your device.
+Look on openwrt's site for help.
+[http://wiki.openwrt.org/doc/start OpenWRT wiki]
+[http://www.openwrt.org Openwrt]
+
+== Compile OpenWRT ==
+just do :
+{{{
+make V=99
+}}}
