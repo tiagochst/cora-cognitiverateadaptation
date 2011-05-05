@@ -1,0 +1,54 @@
+#summary Cofiguring OpenWRT to rspro
+
+= Introduction =
+
+How to configure an Basic Openwrt custom firmware to the following device:
+
+  #  Ubitiqui Routerstation pro 680MHZ/4 LAN GIGA/128 MB/3 SLOTS+USB 
+  #  Mini-PCI Senao 2,4/5,8GHZ NL-5354MP PLUS ARIES2
+  #  Power supply 18V 2000MA 90-240V 18W1820
+  #  Cable Pig tail UFL for SMA
+
+
+= Config =
+In OpenWRT's root to access Openwrt configuration do:
+{{{Make menuconfig}}}
+
+{{{
+Tagert System: Atheros AR71xx/AR7240/AR913x
+Target Profile: (Ubiquiti RouterStation Pro)  
+}}}
+
+For the wireless Driver go to:
+{{{
+Kernel modules ---> Wireless Drivers --->
+}}}
+
+There you should select:
+{{{
+kmod-ath5k (Atheros 5xxx wireless card)
+kmod-madwifi
+}}}
+Kmod-ath5k enables kmod-mac80211,kmod-ath and kmod-cfg80211.
+Kmod-ath has two options that we anabled:
+{{{
+ [*] Force Atheros drivers to respect the user's regdomain settings   
+ [*] Atheros wireless debugging                                        
+}}} 
+Kmod-mac80211 has one options that we anabled:
+{{{
+ [*] Export mac80211 internals in DebugFS
+}}}
+
+Select kmod-madwifi package and anable the following option:
+{{{
+ [*] Combine driver and net80211 into a single module
+}}}
+
+For wireless drivers we're done.
+Next we can use web interface luci:
+Return to main menu and choose:
+{{{
+  LuCI  -->  Collections  --->  <*> luci 
+}}}
+Select luci package
