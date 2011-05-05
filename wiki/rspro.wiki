@@ -52,3 +52,37 @@ Return to main menu and choose:
   LuCI  -->  Collections  --->  <*> luci 
 }}}
 Select luci package
+
+= Other packages =
+After flashing te router, we also have installed the following packages:
+
+  * vsc7385-ucode-ap83 
+  * vsc7385-ucode-pb44 
+  * vsc7395-ucode-ap83 
+  * vsc7395-ucode-pb44 
+  * wpad-mini 
+  * kmod-hostap 
+  * kmod-hostap-pci 
+
+= /etc/config/wireless =
+As long as *wifi detect* was not working, we included manually the wireless configuration in /etc/config.
+
+Be careful with this configuration: *option macaddr* is different to each device.
+
+{{{
+	config wifi-device  radio0
+	        option type     mac80211
+	        option channel  11
+	        option macaddr  00:02:6f:24:42:fe
+	        option hwmode   11g
+	
+	        # REMOVE THIS LINE TO ENABLE WIFI:
+	        option disabled 1
+	
+	config wifi-iface
+	        option device   radio0
+	        option network  lan
+	        option mode     ap
+	        option ssid     OpenWrt
+	        option encryption none
+}}}
