@@ -30,12 +30,12 @@ kmod-ath5k (Atheros 5xxx wireless card)
 kmod-madwifi
 }}}
 Kmod-ath5k enables kmod-mac80211,kmod-ath and kmod-cfg80211.
-Kmod-ath has two options that we anabled:
+Kmod-ath has two options that you should enable:
 {{{
  [*] Force Atheros drivers to respect the user's regdomain settings   
  [*] Atheros wireless debugging                                        
 }}} 
-Kmod-mac80211 has one options that we anabled:
+Kmod-mac80211 has one options that you also should enable:
 {{{
  [*] Export mac80211 internals in DebugFS
 }}}
