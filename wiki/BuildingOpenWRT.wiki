@@ -16,8 +16,8 @@ svn checkout --revision=24045 svn://svn.openwrt.org/openwrt/branches/backfire/ .
 Secondly, update and install the pakages to same version (revision 24045)
 To do that:
 
- *copy feeds.conf.default in ./build_dir to feeds.conf 
- *Add "@24045" at the end of the line that checks out the package feed:
+ * copy feeds.conf.default in ./build_dir to feeds.conf 
+ * Add "@24045" at the end of the line that checks out the package feed:
  It should look like this:
  {{{
     src-svn packages svn://svn.openwrt.org/openwrt/packages@24045
