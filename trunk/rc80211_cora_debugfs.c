@@ -1,5 +1,6 @@
 /*
- *  Copyright (C) 2010 Tiago Chedraoui Silva <tsilva@lrc.ic.unicamp.br>
+ * Copyright (C) 2010 Tiago Chedraoui Silva <tsilva@lrc.ic.unicamp.br>
+ *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
@@ -56,60 +57,82 @@
 #include "rc80211_cora.h"
 
 int
-cora_stats_open(struct inode *inode, struct file *file)
+cora_stats_open (struct inode *inode, struct file *file)
 {
-	struct cora_sta_info *mi = inode->i_private;
-	struct cora_debugfs_info *ms;
-	unsigned int i, tp, prob;
+	struct cora_sta_info *ci = inode->i_private;
+	struct cora_debugfs_info *cs;
+	unsigned int i, avg_tp, avg_prob, cur_tp, cur_prob;
 	char *p;
 
-	ms = kmalloc(sizeof(*ms) + 4096, GFP_KERNEL);
-	if (!ms)
+	cs = kmalloc (sizeof (*cs) + 4096, GFP_KERNEL);
+	if (!cs)
 		return -ENOMEM;
 
-	file->private_data = ms;
-	p = ms->buf;
-	p += sprintf(p, "rate    | throughput ewma | this prob | "
-		     "this succ/attempt | success | attempts | count \n");
-	for (i = 0; i < mi->n_rates; i++) {
-		struct cora_rate *mr = &mi->r[i];
+	file->private_data = cs;
+	p = cs->buf;
 
-		*(p++) = (i == mi->use_this_rate_now) ? 'T' : ' ';
-		p += sprintf(p, "%3u%s", mr->bitrate / 2,
-			     (mr->bitrate & 1 ? ".5" : "  "));
+    /* Table header */
+    p += sprintf(p, "   rate | avg_thp | cur_thp | avg_pro | cur_pro | "
+            "cur suc(att) | success | attempts | # used \n");
 
-		tp=mr->throughput/ ((18000 << 10) / 96);	
-		prob = mr->cur_prob / 18;
+    /* Table lines */
+	for (i = 0; i < ci->n_rates; i++) {
+		struct cora_rate *cr = &ci->r[i];
+    
+        /* Print T for the rate with highest throughput (the mean of normal
+         * curve) and print * for the rate been used now */
+		*(p++) = (i == ci->max_tp_rate_ndx) ? 'T' : ' ';   
+		*(p++) = (i == ci->now_rate_ndx)    ? '*' : ' ';    
 
-		p += sprintf(p, " |       %6u.%1u|   %6u.%1u | "
-			     "%3u(%3u)| %8llu | %8llu | %6u\n ",
-			     tp / 10, tp % 10,
-			     prob / 10, prob % 10,
-			     mr->last_success,
-			     mr->last_attempts,
-			     (unsigned long long)mr->succ_hist,
-			     (unsigned long long)mr->att_hist,
-			     mr->times_called);
+		p += sprintf(p, "%3u%s ", cr->bitrate / 2,
+			     (cr->bitrate & 1 ? ".5" : "  "));
+
+        /* Converting the internal thp and prob format */
+		avg_tp = cr->avg_tp / ((18000 << 10) / 96);
+		cur_tp = cr->cur_tp / ((18000 << 10) / 96);
+		avg_prob = cr->avg_prob / 18;
+		cur_prob = cr->cur_prob / 18;
+
+		p += sprintf (
+                p, 
+                "| %5u.%1u | %5u.%1u | %5u.%1u | %5u.%1u "
+			    "| %5u(%5u) |%8llu | %8llu | %6u\n",
+                avg_tp / 10, avg_tp % 10,
+			    cur_tp / 10, cur_tp % 10,
+                avg_prob / 10, avg_prob % 10,
+			    cur_prob / 10, cur_prob % 10,
+			    cr->last_success, cr->last_attempts,
+			    (unsigned long long) cr->succ_hist,
+			    (unsigned long long) cr->att_hist,
+			    cr->times_called
+            );
 	}
-	p += sprintf(p, "\n TCS - CORA -- Total packet count::  ideal %d Desvio atual %d, taxa max tp %d\n", mi->packet_count, mi->dev,mi->max_tp_rate);
-	ms->len = p - ms->buf;
 
+    /* Table footer */
+    p += sprintf(p, "\n COgnitive Rate Adaptation (CORA) -- "
+            "Current Normal Mean: %2u, Current Normal Stdev: %2u.%2u\n",
+            ci->max_tp_rate_ndx,
+            ci->cur_stdev / 100,
+            ci->cur_stdev % 100
+        );
+
+	cs->len = p - cs->buf;
 	return 0;
 }
 
 ssize_t
-cora_stats_read(struct file *file, char __user *buf, size_t len, loff_t *ppos)
+cora_stats_read (struct file *file, char __user *buf, size_t len, loff_t *ppos)
 {
-	struct cora_debugfs_info *ms;
+	struct cora_debugfs_info *cs;
 
-	ms = file->private_data;
-	return simple_read_from_buffer(buf, len, ppos, ms->buf, ms->len);
+	cs = file->private_data;
+	return simple_read_from_buffer (buf, len, ppos, cs->buf, cs->len);
 }
 
 int
-cora_stats_release(struct inode *inode, struct file *file)
+cora_stats_release (struct inode *inode, struct file *file)
 {
-	kfree(file->private_data);
+	kfree (file->private_data);
 	return 0;
 }
 
@@ -121,18 +144,18 @@ static const struct file_operations cora_stat_fops = {
 };
 
 void
-cora_add_sta_debugfs(void *priv, void *priv_sta, struct dentry *dir)
+cora_add_sta_debugfs (void *priv, void *priv_sta, struct dentry *dir)
 {
-	struct cora_sta_info *mi = priv_sta;
-	mi->dbg_stats = debugfs_create_file("rc_stats", S_IRUGO, dir,
-					    mi,&cora_stat_fops); 
-
+	struct cora_sta_info *ci = priv_sta;
+    
+    ci->dbg_stats = debugfs_create_file ("rc_stats", S_IRUGO, dir,
+            ci, &cora_stat_fops); 
 }
 
 void
 cora_remove_sta_debugfs(void *priv, void *priv_sta)
 {
-	struct cora_sta_info *mi = priv_sta;
-
-	debugfs_remove(mi->dbg_stats);
+	struct cora_sta_info *ci = priv_sta;
+	
+    debugfs_remove (ci->dbg_stats);
 }
