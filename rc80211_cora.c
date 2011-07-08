@@ -237,10 +237,10 @@ cora_update_stats (struct cora_priv *cp, struct cora_sta_info *ci)
 	u32 max_tp = 0;
 	u32 usecs;
 	unsigned int i, max_tp_ndx;
-    unsigned int old_stdev, old_mean;
+	unsigned int old_stdev, old_mean;
 
-    old_stdev = ci->cur_stdev;
-    old_mean = ci->max_tp_rate_ndx;
+	old_stdev = ci->cur_stdev;
+	old_mean = ci->max_tp_rate_ndx;
 	ci->stats_update = jiffies;
 
 	/* For each supported rate... */
@@ -255,17 +255,17 @@ cora_update_stats (struct cora_priv *cp, struct cora_sta_info *ci)
 		 * to 18000 (100%) */
 		if (cr->attempts) {
 
-            /* Update thp and prob for last interval */
+			/* Update thp and prob for last interval */
 			cr->cur_prob = (cr->success * 18000) / cr->attempts;
-		    cr->cur_tp = cr->cur_prob * (1000000 / usecs);
+			cr->cur_tp = cr->cur_prob * (1000000 / usecs);
 
-            /* Update average thp and prob with EWMA */
+			/* Update average thp and prob with EWMA */
 			cr->avg_prob = ((cr->cur_prob * (100 - cp->ewma_level)) + 
 					  (cr->avg_prob * cp->ewma_level)) / 100;
 			cr->avg_tp = ((cr->cur_tp * (100 - cp->ewma_level)) + 
 					  (cr->avg_tp * cp->ewma_level)) / 100;
 
-		    /* Update success and attempt counters */
+			/* Update success and attempt counters */
 			cr->succ_hist += cr->success;
 			cr->att_hist += cr->attempts;
 		}
@@ -288,13 +288,13 @@ cora_update_stats (struct cora_priv *cp, struct cora_sta_info *ci)
 	ci->max_tp_rate_ndx = max_tp_ndx;
 
 	/* Adjusting stdev with Cora AAA */
-    ci->cur_stdev = cora_aaa ((int)old_mean, (int)ci->max_tp_rate_ndx,
-            (int)old_stdev);
+	ci->cur_stdev = cora_aaa ((int)old_mean, (int)ci->max_tp_rate_ndx,
+			(int)old_stdev);
 
    	/* Get a new random rate (using a normal distribution) that will be used
 	 * during the next update_interval. */
-    ci->now_rate_ndx = rc80211_cora_normal_generator ((int)ci->max_tp_rate_ndx,
-            (int)ci->cur_stdev);
+	ci->now_rate_ndx = rc80211_cora_normal_generator ((int)ci->max_tp_rate_ndx,
+			(int)ci->cur_stdev);
 	ci->r[ci->now_rate_ndx].times_called++;
 }
 
@@ -317,7 +317,7 @@ cora_tx_status (void *priv, struct ieee80211_supported_band *sband,
 	/* Updating information for each used rate */
 	for (i = 0; i < IEEE80211_TX_MAX_RATES; i++) {
 	
-    	/* A rate idx -1 means that the following rates weren't used in frame
+		/* A rate idx -1 means that the following rates weren't used in frame
 		 * tx. Read the comments at the end of this file about how
 		 * ieee80211_tx_rate struct is updated by the hardware */
 		if (ar[i].idx < 0)
@@ -364,11 +364,10 @@ cora_get_rate (void *priv, struct ieee80211_sta *sta, void *priv_sta,
 	/* Check the need of an update_stats based on update_interval.
 	 * This work as a timmer. */
 	if (time_after (jiffies, ci->stats_update + 
-            (cp->update_interval * HZ) / 1000))
+			(cp->update_interval * HZ) / 1000))
 		cora_update_stats (cp, ci);
 
-    //FIXME Talvez usar o MRR???
-    /* Setting up tx rate information. Be careful to convert ndx indexes into
+	/* Setting up tx rate information. Be careful to convert ndx indexes into
 	 * ieee80211_tx_rate indexes */
 	ar[0].idx = ci->r[ci->now_rate_ndx].rix;
 	ar[0].count = cp->max_retry;
@@ -390,10 +389,10 @@ calc_rate_durations (struct ieee80211_local *local, struct cora_rate *cr,
 {
 	int erp = !!(rate->flags & IEEE80211_RATE_ERP_G);
 
-    cr->perfect_tx_time = ieee80211_frame_duration (local, 1200, 
-            rate->bitrate, erp, 1);
-    cr->ack_time = ieee80211_frame_duration (local, 10, 
-            rate->bitrate, erp, 1);
+	cr->perfect_tx_time = ieee80211_frame_duration (local, 1200, 
+			rate->bitrate, erp, 1);
+	cr->ack_time = ieee80211_frame_duration (local, 10, 
+			rate->bitrate, erp, 1);
 }
 
 
@@ -401,7 +400,7 @@ calc_rate_durations (struct ieee80211_local *local, struct cora_rate *cr,
  * information for supported rates */
 static void
 cora_rate_init (void *priv, struct ieee80211_supported_band *sband,
-        struct ieee80211_sta *sta, void *priv_sta)
+		struct ieee80211_sta *sta, void *priv_sta)
 {
 	struct cora_sta_info *ci = priv_sta;
 	struct cora_priv *cp = priv;
@@ -455,20 +454,20 @@ cora_rate_init (void *priv, struct ieee80211_supported_band *sband,
 			tx_time_cts += tx_time_single + sp_ack_dur;
 			tx_time_rtscts += tx_time_single + 2 * sp_ack_dur;
 			if ((tx_time_cts < cp->segment_size) &&
-			    (cr->retry_count_cts < cp->max_retry))
+					(cr->retry_count_cts < cp->max_retry))
 				cr->retry_count_cts++;
 			if ((tx_time_rtscts < cp->segment_size) &&
-			    (cr->retry_count_rtscts < cp->max_retry))
+					(cr->retry_count_rtscts < cp->max_retry))
 				cr->retry_count_rtscts++;
 		} while ((tx_time < cp->segment_size) &&
-			 (++cr->retry_count < cp->max_retry));
+			 	(++cr->retry_count < cp->max_retry));
 		cr->adjusted_retry_count = cr->retry_count;
 	}
 
 	/* Sort rates based on bitrate */
-    sort_bitrates (ci, n);
+	sort_bitrates (ci, n);
 
-    /* Mark unsupported rates with rix = -1 */
+	/* Mark unsupported rates with rix = -1 */
 	for (i = n; i < sband->n_bitrates; i++) {
 		struct cora_rate *cr = &ci->r[i];
 		cr->rix = -1;
@@ -539,7 +538,7 @@ cora_alloc (struct ieee80211_hw *hw, struct dentry *debugfsdir)
 
 	/* Default cora values */
 	cp->cw_min = 15;
-	cp->cw_max = 1023;      
+	cp->cw_max = 1023;
 	cp->ewma_level = CORA_EWMA_LEVEL;
 	cp->update_interval = 100;
 
@@ -586,7 +585,7 @@ struct rate_control_ops mac80211_cora = {
 int __init
 rc80211_cora_init(void)
 {
-    printk ("LJC & TCS CORA algorithm.\n");
+	printk ("LJC & TCS CORA algorithm.\n");
 	return ieee80211_rate_control_register(&mac80211_cora);
 }
 

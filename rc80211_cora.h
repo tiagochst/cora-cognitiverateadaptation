@@ -14,7 +14,7 @@
 
 #define CORA_MAX_STDEV		150
 #define CORA_MIN_STDEV		40
-#define CORA_EWMA_LEVEL     30
+#define CORA_EWMA_LEVEL		30
 
 /* cora_rate is allocated once for each available rate at each cora_sta_info.
  * Information in this struct is private to this rate at this station */ 
@@ -99,7 +99,7 @@ struct cora_debugfs_info {
 
 int cora_stats_open (struct inode *inode, struct file *file);
 ssize_t cora_stats_read (struct file *file, char __user *buf, size_t len, 
-        loff_t *ppos);
+		loff_t *ppos);
 int cora_stats_release (struct inode *inode, struct file *file);
 
 #endif
