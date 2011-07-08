@@ -35,7 +35,7 @@ make menuconfig
 
 Now you can select the options that matchs your hardware. Be careful!! You should use an appropriate configuration for your device or your device can be unreachable.
  
-If you are not familiar with this step, take a look at openwrt's site for help: http://wiki.openwrt.org/doc/start OpenWRT wiki and http://www.openwrt.org Openwrt
+If you are not familiar with this step, take a look at openwrt's site for help: http://wiki.openwrt.org/doc/start and http://www.openwrt.org
 
 The CORA code in this project was tested in a Ubiquiti RouterStation Pro with an Atheros Chipset. You can check the configuration for this hardware at [rspro]
 
