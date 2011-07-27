@@ -23,7 +23,6 @@ src-svn packages svn://svn.openwrt.org/openwrt/packages@24045
 
 Update and install the packages:
 {{{
-cd ..
 ./scripts/feeds update -a && ./scripts/feeds install -a
 }}}
 
@@ -39,7 +38,7 @@ If you are not familiar with this step, take a look at openwrt's site for help: 
 
 The CORA code in this project was tested in a Ubiquiti RouterStation Pro with an Atheros Chipset. You can check the configuration for this hardware at [rspro]
 
-== Compileing OpenWRT ==
+== Compiling OpenWRT ==
 In order to compile the code just execute:
 {{{
 make V=99
