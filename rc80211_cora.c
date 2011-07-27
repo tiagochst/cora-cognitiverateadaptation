@@ -88,7 +88,7 @@ rc80211_cora_normal_generator (int mean, int stdev_times100)
 	 *
 	 * Since we are using twelve integer uniform numbers of one byte (n in
 	 * [0,255]) instead of uniform numbers from 0 to 1, this code returns a
-	 * variable from a normal curve with mean of ((12 * 255)-6)/2 = 1524 and
+	 * variable from a normal curve with mean of ((12 * 255)-12)/2 = 1524 and
 	 * stdev of 256 (1 byte) */
 	for (i = 0; i < 12; i++) {
 		get_random_bytes(&rand, 4);
@@ -194,20 +194,6 @@ rix_to_ndx (struct cora_sta_info *ci, int rix)
 }
 
 
-/* Calculate the retry count based on cora rate */
-static inline unsigned int
-cora_get_retry_count (struct cora_rate *cr, struct ieee80211_tx_info *info)
-{
-	unsigned int retry = cr->adjusted_retry_count;
-
-	if (info->control.rates[0].flags & IEEE80211_TX_RC_USE_RTS_CTS)
-		retry = max(2U, min(cr->retry_count_rtscts, retry));
-	else if (info->control.rates[0].flags & IEEE80211_TX_RC_USE_CTS_PROTECT)
-		retry = max(2U, min(cr->retry_count_cts, retry));
-	return retry;
-}
-
-
 /* Sort rates by bitrates. Is called once by cora_rate_init */
 static void
 sort_bitrates (struct cora_sta_info *ci, int n_rates)
@@ -234,9 +220,9 @@ sort_bitrates (struct cora_sta_info *ci, int n_rates)
 static void
 cora_update_stats (struct cora_priv *cp, struct cora_sta_info *ci)
 {
-	u32 max_tp = 0;
+	u32 max_tp = 0, max_prob = 0;
 	u32 usecs;
-	unsigned int i, max_tp_ndx;
+	unsigned int i, max_tp_ndx, max_prob_ndx;
 	unsigned int old_stdev, old_mean;
 
 	old_stdev = ci->cur_stdev;
@@ -247,22 +233,22 @@ cora_update_stats (struct cora_priv *cp, struct cora_sta_info *ci)
 	for (i = 0; i < ci->n_rates; i++) {
 		struct cora_rate *cr = &ci->r[i]; 
 
-		usecs = cr->perfect_tx_time;
-		if (!usecs)
-			usecs = 1000000;
-
 		/* To avoid rounding issues, probabilities scale from 0 (0%)
-		 * to 18000 (100%) */
+		 * to 2000 (100%) */
 		if (cr->attempts) {
+			
+			usecs = cr->perfect_tx_time;
+			if (!usecs)
+				usecs = 1000000;
 
 			/* Update thp and prob for last interval */
-			cr->cur_prob = (cr->success * 18000) / cr->attempts;
+			cr->cur_prob = (cr->success * 2000) / cr->attempts;
 			cr->cur_tp = cr->cur_prob * (1000000 / usecs);
 
 			/* Update average thp and prob with EWMA */
 			cr->avg_prob = ((cr->cur_prob * (100 - cp->ewma_level)) + 
 					  (cr->avg_prob * cp->ewma_level)) / 100;
-			cr->avg_tp = ((cr->cur_tp * (100 - cp->ewma_level)) + 
+			cr->avg_tp = ((cr->cur_tp    * (100 - cp->ewma_level)) + 
 					  (cr->avg_tp * cp->ewma_level)) / 100;
 
 			/* Update success and attempt counters */
@@ -277,15 +263,20 @@ cora_update_stats (struct cora_priv *cp, struct cora_sta_info *ci)
 		cr->attempts = 0;
 	}
 
-	/* Look for the rate with highest throughput */
+	/* Look for the rate with highest throughput and probability */
 	for (i = 0; i < ci->n_rates; i++) {
 		struct cora_rate *cr = &ci->r[i];
 		if (max_tp < cr->avg_tp) {
 			max_tp_ndx = i;
 			max_tp = cr->avg_tp;
 		}
+		if (max_prob < cr->avg_prob) {
+			max_prob_ndx = i;
+			max_prob = cr->avg_prob;
+		}
 	}
 	ci->max_tp_rate_ndx = max_tp_ndx;
+	ci->max_prob_rate_ndx = max_prob_ndx;
 
 	/* Adjusting stdev with Cora AAA */
 	ci->cur_stdev = cora_aaa ((int)old_mean, (int)ci->max_tp_rate_ndx,
@@ -293,9 +284,9 @@ cora_update_stats (struct cora_priv *cp, struct cora_sta_info *ci)
 
    	/* Get a new random rate (using a normal distribution) that will be used
 	 * during the next update_interval. */
-	ci->now_rate_ndx = rc80211_cora_normal_generator ((int)ci->max_tp_rate_ndx,
+	ci->random_rate_ndx = rc80211_cora_normal_generator ((int)ci->max_tp_rate_ndx,
 			(int)ci->cur_stdev);
-	ci->r[ci->now_rate_ndx].times_called++;
+	ci->r[ci->random_rate_ndx].times_called++;
 }
 
 
@@ -317,9 +308,7 @@ cora_tx_status (void *priv, struct ieee80211_supported_band *sband,
 	/* Updating information for each used rate */
 	for (i = 0; i < IEEE80211_TX_MAX_RATES; i++) {
 	
-		/* A rate idx -1 means that the following rates weren't used in frame
-		 * tx. Read the comments at the end of this file about how
-		 * ieee80211_tx_rate struct is updated by the hardware */
+		/* A rate idx -1 means that the following rates weren't used in tx */
 		if (ar[i].idx < 0)
 			break;
 
@@ -339,6 +328,26 @@ cora_tx_status (void *priv, struct ieee80211_supported_band *sband,
 }
 
 
+/* Retrieves the retry count for a specific random cora rate */
+static inline unsigned int
+cora_get_retry_count (struct cora_rate *cr_rnd, struct cora_rate *cr_bst,
+		struct ieee80211_tx_info *info)
+{
+	/* At least two attempts are always performed */	
+	unsigned int retry = max (2U, cr_rnd->retry_count); 
+
+	/* If rate has lower delivery probability sample at most twice */
+	if (cr_rnd->avg_prob < 200)
+		retry = 2U;
+	
+	/* If random rate has lower bitrate than the best one sample less */
+	else if (cr_rnd->bitrate < cr_bst->bitrate)
+		retry = max (2U, cr_rnd->retry_count>>1);
+
+	return retry;
+}
+
+
 /* cora_get_rate is called just before each frame tx and sets the appropriate
  * data rate to be used */
 static void
@@ -351,7 +360,6 @@ cora_get_rate (void *priv, struct ieee80211_sta *sta, void *priv_sta,
 	struct cora_priv *cp = priv;
 	struct ieee80211_tx_rate *ar = info->control.rates;
 	bool mrr;
-	unsigned int i;
 
 	/* Check for management or control packet, which should be transmitted
 	 * unsing lower rate */
@@ -369,15 +377,34 @@ cora_get_rate (void *priv, struct ieee80211_sta *sta, void *priv_sta,
 
 	/* Setting up tx rate information. Be careful to convert ndx indexes into
 	 * ieee80211_tx_rate indexes */
-	ar[0].idx = ci->r[ci->now_rate_ndx].rix;
-	ar[0].count = cp->max_retry;
 
-	if (mrr) {
-		for (i=1; i < IEEE80211_TX_MAX_RATES; i++) {
-			ar[i].idx = -1;
-			ar[i].count = 0;
-		}
+	if (!mrr) {
+		ar[0].idx = ci->r[ci->random_rate_ndx].rix;
+		ar[0].count = cp->max_retry;
+		ar[1].idx = -1;
+		ar[1].count = 0;
+		return;
 	}
+	
+	/* MRR setup */
+	/* Random CORA rate. For this rate the retry count depends on the random
+	 * value and wil be defined by cora_get_retry_count function */
+	ar[0].idx = ci->r[ci->random_rate_ndx].rix;
+	ar[0].count = cora_get_retry_count (&ci->r[ci->random_rate_ndx],
+			&ci->r[ci->max_tp_rate_ndx], info);
+
+	/* Best throughput. For this rate on the retry count is the one defined in
+	 * cora_rate_init function observing the max segment_size */
+	ar[1].idx = ci->r[ci->max_tp_rate_ndx].rix;;
+	ar[1].count = ci->r[ci->max_tp_rate_ndx].retry_count;
+
+	/* Best probability */
+	ar[2].idx = ci->r[ci->max_prob_rate_ndx].rix;
+	ar[2].count = ci->r[ci->max_prob_rate_ndx].retry_count;
+
+	/* Lowest rate */
+	ar[3].idx = ci->lowest_rix;
+	ar[3].count = ci->r[rix_to_ndx (ci, ci->lowest_rix)].retry_count;
 }
 
 
@@ -419,7 +446,7 @@ cora_rate_init (void *priv, struct ieee80211_supported_band *sband,
 	/* Populating information for each supported rate */
 	for (i = 0; i < sband->n_bitrates; i++) {
 		struct cora_rate *cr = &ci->r[n];
-		unsigned int tx_time = 0, tx_time_cts = 0, tx_time_rtscts = 0;
+		unsigned int tx_time = 0;
 		unsigned int tx_time_single;
 		unsigned int cw = cp->cw_min;
 
@@ -438,12 +465,10 @@ cora_rate_init (void *priv, struct ieee80211_supported_band *sband,
 		/* Calculate maximum number of retransmissions before
 		 * fallback (based on maximum segment size) */
 		cr->retry_count = 1;
-		cr->retry_count_cts = 1;
-		cr->retry_count_rtscts = 1;
 		
 		do {
 			/* Add one retransmission */
-			tx_time_single = cr->ack_time + cr->perfect_tx_time;
+			tx_time_single = cr->perfect_tx_time + cr->ack_time;
 
 			/* Contention window */
 			tx_time_single += t_slot + min (cw, cp->cw_max);
@@ -451,17 +476,8 @@ cora_rate_init (void *priv, struct ieee80211_supported_band *sband,
 
 			/* Supose normal mode, with cts and with rts/cts */
 			tx_time += tx_time_single;
-			tx_time_cts += tx_time_single + sp_ack_dur;
-			tx_time_rtscts += tx_time_single + 2 * sp_ack_dur;
-			if ((tx_time_cts < cp->segment_size) &&
-					(cr->retry_count_cts < cp->max_retry))
-				cr->retry_count_cts++;
-			if ((tx_time_rtscts < cp->segment_size) &&
-					(cr->retry_count_rtscts < cp->max_retry))
-				cr->retry_count_rtscts++;
 		} while ((tx_time < cp->segment_size) &&
 			 	(++cr->retry_count < cp->max_retry));
-		cr->adjusted_retry_count = cr->retry_count;
 	}
 
 	/* Sort rates based on bitrate */
@@ -476,6 +492,7 @@ cora_rate_init (void *priv, struct ieee80211_supported_band *sband,
 	ci->cur_stdev = CORA_MAX_STDEV;
 	ci->n_rates = n;
 	ci->stats_update = jiffies;
+
 }
 
 
@@ -594,33 +611,4 @@ rc80211_cora_exit(void)
 {
 	ieee80211_rate_control_unregister(&mac80211_cora);
 }
-
-/* struct ieee80211_tx_rate - rate selection/status
- *
- * @idx: rate index to attempt to send with
- * @flags: rate control flags (&enum mac80211_rate_control_flags)
- * @count: number of tries in this rate before going to the next rate
- *
- * A value of -1 for @idx indicates an invalid rate and, if used
- * in an array of retry rates, that no more rates should be tried.
- *
- * When used for transmit status reporting, the driver should
- * always report the rate along with the flags it used.
- *
- * &struct ieee80211_tx_info contains an array of these structs
- * in the control information, and it will be filled by the rate
- * control algorithm according to what should be sent. For example,
- * if this array contains, in the format { <idx>, <count> } the
- * information
- *    { 3, 2 }, { 2, 2 }, { 1, 4 }, { -1, 0 }, { -1, 0 }
- * then this means that the frame should be transmitted
- * up to twice at rate 3, up to twice at rate 2, and up to four
- * times at rate 1 if it doesn't get acknowledged. Say it gets
- * acknowledged by the peer after the fifth attempt, the status
- * information should then contain
- *   { 3, 2 }, { 2, 2 }, { 1, 1 }, { -1, 0 } ...
- * since it was transmitted twice at rate 3, twice at rate 2
- * and once at rate 1 after which we received an acknowledgement. */
-
-
 
