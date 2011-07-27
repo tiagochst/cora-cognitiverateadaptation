@@ -234,7 +234,7 @@ cora_update_stats (struct cora_priv *cp, struct cora_sta_info *ci)
 		struct cora_rate *cr = &ci->r[i]; 
 
 		/* To avoid rounding issues, probabilities scale from 0 (0%)
-		 * to 2000 (100%) */
+		 * to 1800 (100%) */
 		if (cr->attempts) {
 			
 			usecs = cr->perfect_tx_time;
@@ -242,7 +242,7 @@ cora_update_stats (struct cora_priv *cp, struct cora_sta_info *ci)
 				usecs = 1000000;
 
 			/* Update thp and prob for last interval */
-			cr->cur_prob = (cr->success * 2000) / cr->attempts;
+			cr->cur_prob = (cr->success * 1800) / cr->attempts;
 			cr->cur_tp = cr->cur_prob * (1000000 / usecs);
 
 			/* Update average thp and prob with EWMA */
@@ -337,7 +337,7 @@ cora_get_retry_count (struct cora_rate *cr_rnd, struct cora_rate *cr_bst,
 	unsigned int retry = max (2U, cr_rnd->retry_count); 
 
 	/* If rate has lower delivery probability sample at most twice */
-	if (cr_rnd->avg_prob < 200)
+	if (cr_rnd->avg_prob < 180)
 		retry = 2U;
 	
 	/* If random rate has lower bitrate than the best one sample less */
