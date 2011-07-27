@@ -36,9 +36,6 @@ struct cora_rate {
 
 	/* Personalized retry count to avoid stall in the same packet */
 	unsigned int retry_count;
-	unsigned int retry_count_cts;
-	unsigned int retry_count_rtscts;
-	unsigned int adjusted_retry_count;
 
 	/* Tx success and attempts counters */
 	u32 success;					// during last interval
@@ -58,7 +55,8 @@ struct cora_rate {
 struct cora_sta_info {
 	unsigned int cur_stdev;			// current normal stdev
 	unsigned int max_tp_rate_ndx;	// index of rate with highest thp (current normal mean)
-	unsigned int now_rate_ndx;		// random rate index (will be used in the next interval) 
+	unsigned int max_prob_rate_ndx;	// index of rate with highest probability
+	unsigned int random_rate_ndx;	// random rate index (will be used in the next interval) 
 	unsigned int lowest_rix;		// lowest rate index 
 	unsigned long stats_update;		// last update time (jiffies)
 	unsigned int n_rates;			// number o supported rates 

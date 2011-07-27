@@ -72,35 +72,37 @@ cora_stats_open (struct inode *inode, struct file *file)
 	p = cs->buf;
 
 	/* Table header */
-	p += sprintf(p, "   rate | avg_thp | cur_thp | avg_pro | cur_pro | "
-			"cur suc(att) | success | attempts | # used \n");
+	p += sprintf(p, "    rate | avg_thp | avg_pro | cur_thp | cur_pro | "
+			"succ ( att ) | success | attempts | # used \n");
 
 	/* Table lines */
 	for (i = 0; i < ci->n_rates; i++) {
 		struct cora_rate *cr = &ci->r[i];
 
 		/* Print T for the rate with highest throughput (the mean of normal
-		 * curve) and print * for the rate been used now */
-		*(p++) = (i == ci->max_tp_rate_ndx) ? 'T' : ' ';   
-		*(p++) = (i == ci->now_rate_ndx)	? '*' : ' ';
+		 * curve), P for the rate with hisgest delivery probability and print *
+		 * for the rate been used now */
+		*(p++) = (i == ci->random_rate_ndx)		? '*' : ' ';
+		*(p++) = (i == ci->max_tp_rate_ndx) 	? 'T' : ' ';   
+		*(p++) = (i == ci->max_prob_rate_ndx) 	? 'P' : ' ';   
 
 		p += sprintf(p, "%3u%s ", cr->bitrate / 2,
 				(cr->bitrate & 1 ? ".5" : "  "));
 
 		/* Converting the internal thp and prob format */
-		avg_tp = cr->avg_tp / ((18000 << 10) / 96);
-		cur_tp = cr->cur_tp / ((18000 << 10) / 96);
-		avg_prob = cr->avg_prob / 18;
-		cur_prob = cr->cur_prob / 18;
+		avg_tp = cr->avg_tp / ((1800 << 10) / 96);
+		cur_tp = cr->cur_tp / ((1800 << 10) / 96);
+		avg_prob = cr->avg_prob;
+		cur_prob = cr->cur_prob;
 
 		p += sprintf (
 				p, 
-				"| %5u.%1u | %5u.%1u | %5u.%1u | %5u.%1u "
-				"| %5u(%5u) |%8llu | %8llu | %6u\n",
+				"| %5u.%1u |   %5u | %5u.%1u |   %5u | "
+				"%5u(%5u) |%8llu | %8llu | %6u\n",
 				avg_tp / 10, avg_tp % 10,
+				avg_prob / 18,
 				cur_tp / 10, cur_tp % 10,
-				avg_prob / 10, avg_prob % 10,
-				cur_prob / 10, cur_prob % 10,
+				cur_prob / 18,
 				cr->last_success, cr->last_attempts,
 				(unsigned long long) cr->succ_hist,
 				(unsigned long long) cr->att_hist,
@@ -109,11 +111,13 @@ cora_stats_open (struct inode *inode, struct file *file)
 	}
 
 	/* Table footer */
-	p += sprintf(p, "\n COgnitive Rate Adaptation (CORA) -- "
-			"Current Normal Mean: %2u, Current Normal Stdev: %2u.%2u\n",
+	p += sprintf(p, "\n COgnitive Rate Adaptation (CORA):\n"
+			"   Number of rates: %2u\n"
+			"   Current Normal Mean: %2u\n"
+		   	"   Current Normal Stdev: %2u.%2u\n",
+			ci->n_rates,
 			ci->max_tp_rate_ndx,
-			ci->cur_stdev / 100,
-			ci->cur_stdev % 100
+			ci->cur_stdev / 100, ci->cur_stdev % 100
 		);
 
 	cs->len = p - cs->buf;
