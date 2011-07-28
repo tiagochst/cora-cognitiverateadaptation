@@ -72,7 +72,7 @@ cora_stats_open (struct inode *inode, struct file *file)
 	p = cs->buf;
 
 	/* Table header */
-	p += sprintf(p, "    rate | avg_thp | avg_pro | cur_thp | cur_pro | "
+	p += sprintf(p, "    | rate | avg_thp | avg_pro | cur_thp | cur_pro | "
 			"succ ( att ) | success | attempts | # used \n");
 
 	/* Table lines */
@@ -86,7 +86,7 @@ cora_stats_open (struct inode *inode, struct file *file)
 		*(p++) = (i == ci->max_tp_rate_ndx) 	? 'T' : ' ';   
 		*(p++) = (i == ci->max_prob_rate_ndx) 	? 'P' : ' ';   
 
-		p += sprintf(p, "%3u%s ", cr->bitrate / 2,
+		p += sprintf(p, " |%3u%s ", cr->bitrate / 2,
 				(cr->bitrate & 1 ? ".5" : "  "));
 
 		/* Converting the internal thp and prob format */
