@@ -13,7 +13,7 @@ cd (path_to_openwrt)/package/mac80211
 
 Replace the Makefile for the one in the repository of this project.
 
-Then, copy the file "950-cora-configure.patche" from this projet into de followgin directory:
+Then, copy the file "950-cora-configure.patche" from this project into de following directory:
 {{{
 (path_to_openwrt)/package/mac80211/patches/
 }}}                   
