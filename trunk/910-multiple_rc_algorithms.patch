@@ -1,0 +1,263 @@
+--- a/config.mk
++++ b/config.mk
+@@ -105,16 +105,18 @@ CONFIG_MAC80211=m
+ # CONFIG_MAC80211_DEBUG_COUNTERS=y
+ # CONFIG_MAC80211_DRIVER_API_TRACER=y
+ 
+-# choose between pid and minstrel as default rate control algorithm
+-CONFIG_MAC80211_RC_DEFAULT=minstrel_ht
+-CONFIG_MAC80211_RC_DEFAULT_MINSTREL=y
+-# CONFIG_MAC80211_RC_DEFAULT_PID=y
+-# This is the one used by our compat-wireless net/mac80211/rate.c
+-# in case you have and old kernel which is overriding this to pid.
+-CONFIG_COMPAT_MAC80211_RC_DEFAULT=minstrel_ht
+-# CONFIG_MAC80211_RC_PID=y
++# Select in the next two lines which rate control algorithm to use
++CONFIG_MAC80211_RC_DEFAULT=cora
++CONFIG_COMPAT_MAC80211_RC_DEFAULT=cora
++CONFIG_MAC80211_RC_CORA=y
+ CONFIG_MAC80211_RC_MINSTREL=y
+ CONFIG_MAC80211_RC_MINSTREL_HT=y
++CONFIG_MAC80211_RC_ARF=y
++CONFIG_MAC80211_RC_AARF=y
++CONFIG_MAC80211_RC_CARA=y
++CONFIG_MAC80211_RC_PID=y
++CONFIG_MAC80211_RC_FIXED=y
++
+ # CONFIG_MAC80211_LEDS=y
+ 
+ # enable mesh networking too
+--- a/net/mac80211/Makefile
++++ b/net/mac80211/Makefile
+@@ -44,10 +44,24 @@ mac80211-$(CONFIG_PM) += pm.o
+ mac80211-$(CONFIG_MAC80211_DRIVER_API_TRACER) += driver-trace.o
+ CFLAGS_driver-trace.o := -I$(src)
+ 
+-# objects for PID algorithm
+ rc80211_pid-y := rc80211_pid_algo.o
+ rc80211_pid-$(CONFIG_MAC80211_DEBUGFS) += rc80211_pid_debugfs.o
+ 
++rc80211_cora-y := rc80211_cora.o
++rc80211_cora-$(CONFIG_MAC80211_DEBUGFS) += rc80211_cora_debugfs.o
++
++rc80211_arf-y := rc80211_arf.o
++rc80211_arf-$(CONFIG_MAC80211_DEBUGFS) += rc80211_arf_debugfs.o
++
++rc80211_aarf-y := rc80211_aarf.o
++rc80211_aarf-$(CONFIG_MAC80211_DEBUGFS) += rc80211_aarf_debugfs.o
++
++rc80211_cara-y := rc80211_cara.o
++rc80211_cara-$(CONFIG_MAC80211_DEBUGFS) += rc80211_cara_debugfs.o
++
++rc80211_fixed-y := rc80211_fixed.o
++rc80211_fixed-$(CONFIG_MAC80211_DEBUGFS) += rc80211_fixed_debugfs.o
++
+ rc80211_minstrel-y := rc80211_minstrel.o
+ rc80211_minstrel-$(CONFIG_MAC80211_DEBUGFS) += rc80211_minstrel_debugfs.o
+ 
+@@ -55,6 +69,11 @@ rc80211_minstrel_ht-y := rc80211_minstre
+ rc80211_minstrel_ht-$(CONFIG_MAC80211_DEBUGFS) += rc80211_minstrel_ht_debugfs.o
+ 
+ mac80211-$(CONFIG_MAC80211_RC_PID) += $(rc80211_pid-y)
++mac80211-$(CONFIG_MAC80211_RC_CORA) += $(rc80211_cora-y)
++mac80211-$(CONFIG_MAC80211_RC_ARF) += $(rc80211_arf-y)
++mac80211-$(CONFIG_MAC80211_RC_AARF) += $(rc80211_aarf-y)
++mac80211-$(CONFIG_MAC80211_RC_CARA) += $(rc80211_cara-y)
++mac80211-$(CONFIG_MAC80211_RC_FIXED) += $(rc80211_fixed-y)
+ mac80211-$(CONFIG_MAC80211_RC_MINSTREL) += $(rc80211_minstrel-y)
+ mac80211-$(CONFIG_MAC80211_RC_MINSTREL_HT) += $(rc80211_minstrel_ht-y)
+ 
+--- a/net/mac80211/main.c
++++ b/net/mac80211/main.c
+@@ -935,29 +935,60 @@ static int __init ieee80211_init(void)
+ 	BUILD_BUG_ON(offsetof(struct ieee80211_tx_info, driver_data) +
+ 		     IEEE80211_TX_INFO_DRIVER_DATA_SIZE > sizeof(skb->cb));
+ 
+-	ret = rc80211_minstrel_init();
++	ret = rc80211_cora_init();
+ 	if (ret)
+ 		return ret;
+ 
+-	ret = rc80211_minstrel_ht_init();
++	ret = rc80211_minstrel_init();
+ 	if (ret)
+ 		goto err_minstrel;
+ 
++	ret = rc80211_minstrel_ht_init();
++	if (ret)
++		goto err_minstrel_ht;
++
+ 	ret = rc80211_pid_init();
+ 	if (ret)
+ 		goto err_pid;
+ 
++    ret = rc80211_arf_init();
++	if (ret)
++		goto err_arf;
++
++    ret = rc80211_aarf_init();
++	if (ret)
++		goto err_aarf;
++    
++    ret = rc80211_cara_init();
++	if (ret)
++		goto err_cara;
++ 
++    ret = rc80211_fixed_init();
++	if (ret)
++		goto err_fixed;
++
+ 	ret = ieee80211_iface_init();
+ 	if (ret)
+ 		goto err_netdev;
+ 
+-	return 0;
++   	return 0;
++
+  err_netdev:
++    rc80211_fixed_exit();
++ err_fixed:
++    rc80211_cara_exit();
++ err_cara:
++    rc80211_aarf_exit();
++ err_aarf:
++    rc80211_arf_exit(); 
++ err_arf:
+ 	rc80211_pid_exit();
+  err_pid:
+ 	rc80211_minstrel_ht_exit();
+- err_minstrel:
++ err_minstrel_ht:
+ 	rc80211_minstrel_exit();
++ err_minstrel:
++    rc80211_cora_exit();
+ 
+ 	return ret;
+ }
+@@ -967,8 +998,13 @@ static void __exit ieee80211_exit(void)
+ 	rc80211_pid_exit();
+ 	rc80211_minstrel_ht_exit();
+ 	rc80211_minstrel_exit();
+-
+-	/*
++	rc80211_cora_exit();
++	rc80211_arf_exit();
++	rc80211_aarf_exit();
++	rc80211_cara_exit();
++	rc80211_fixed_exit();
++	
++    /*
+ 	 * For key todo, it'll be empty by now but the work
+ 	 * might still be scheduled.
+ 	 */
+--- a/net/mac80211/rate.h
++++ b/net/mac80211/rate.h
+@@ -160,5 +160,70 @@ static inline void rc80211_minstrel_ht_e
+ }
+ #endif
+ 
++#ifdef CONFIG_MAC80211_RC_CORA
++extern int rc80211_cora_init(void);
++extern void rc80211_cora_exit(void);
++#else
++static inline int rc80211_cora_init(void)
++{
++   return 0;
++}
++static inline void rc80211_cora_exit(void)
++{
++}
++#endif
++
++#ifdef CONFIG_MAC80211_RC_ARF
++extern int rc80211_arf_init(void);
++extern void rc80211_arf_exit(void);
++#else
++static inline int rc80211_arf_init(void)
++{
++   return 0;
++}
++static inline void rc80211_arf_exit(void)
++{
++}
++#endif
++
++#ifdef CONFIG_MAC80211_RC_AARF
++extern int rc80211_aarf_init(void);
++extern void rc80211_aarf_exit(void);
++#else
++static inline int rc80211_aarf_init(void)
++{
++   return 0;
++}
++static inline void rc80211_aarf_exit(void)
++{
++}
++#endif
++
++#ifdef CONFIG_MAC80211_RC_CARA
++extern int rc80211_cara_init(void);
++extern void rc80211_cara_exit(void);
++#else
++static inline int rc80211_cara_init(void)
++{
++   return 0;
++}
++static inline void rc80211_cara_exit(void)
++{
++}
++#endif
++
++#ifdef CONFIG_MAC80211_RC_FIXED
++extern int rc80211_fixed_init(void);
++extern void rc80211_fixed_exit(void);
++#else
++static inline int rc80211_fixed_init(void)
++{
++   return 0;
++}
++static inline void rc80211_fixed_exit(void)
++{
++}
++#endif
++
+ 
+ #endif /* IEEE80211_RATE_H */
+--- a/net/mac80211/tx.c
++++ b/net/mac80211/tx.c
+@@ -600,7 +600,7 @@ ieee80211_tx_h_rate_ctrl(struct ieee8021
+ 	struct ieee80211_rate *rate;
+ 	int i;
+ 	u32 len;
+-	bool inval = false, rts = false, short_preamble = false;
++	bool inval = false, short_preamble = false;
+ 	struct ieee80211_tx_rate_control txrc;
+ 	u32 sta_flags;
+ 
+@@ -627,7 +627,7 @@ ieee80211_tx_h_rate_ctrl(struct ieee8021
+ 
+ 	/* set up RTS protection if desired */
+ 	if (len > tx->local->hw.wiphy->rts_threshold) {
+-		txrc.rts = rts = true;
++		txrc.rts = true;
+ 	}
+ 
+ 	/*
+@@ -738,7 +738,7 @@ ieee80211_tx_h_rate_ctrl(struct ieee8021
+ 		}
+ 
+ 		/* set up RTS protection if desired */
+-		if (rts)
++		if (txrc.rts)
+ 			info->control.rates[i].flags |=
+ 				IEEE80211_TX_RC_USE_RTS_CTS;
+ 
+@@ -758,7 +758,7 @@ ieee80211_tx_h_rate_ctrl(struct ieee8021
+ 				IEEE80211_TX_RC_USE_SHORT_PREAMBLE;
+ 
+ 		/* set up G protection */
+-		if (!rts && tx->sdata->vif.bss_conf.use_cts_prot &&
++		if (!txrc.rts && tx->sdata->vif.bss_conf.use_cts_prot &&
+ 		    rate->flags & IEEE80211_RATE_ERP_G)
+ 			info->control.rates[i].flags |=
+ 				IEEE80211_TX_RC_USE_CTS_PROTECT;

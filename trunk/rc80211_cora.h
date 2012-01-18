@@ -1,8 +1,9 @@
 /*
- * Copyright (C) 2010 Tiago Chedraoui Silva <tsilva@lrc.ic.unicamp.br>
+ * Copyright (C) 2012 Luciano Jerez Chaves <luciano@lrc.ic.unicamp.br>
  * 
  * Based on rc80211_minstrel.h:
  * Copyright (C) 2008 Felix Fietkau <nbd@openwrt.org>
+ * Copyright (C) 2010 Tiago Chedraoui Silva <tsilva@lrc.ic.unicamp.br>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -12,9 +13,27 @@
 #ifndef __RC_CORA_H
 #define __RC_CORA_H
 
-#define CORA_MAX_STDEV		150
-#define CORA_MIN_STDEV		40
-#define CORA_EWMA_LEVEL		30
+/* Cora custom code optimization */
+#define CORA_FAST_RECOVERY				// short update interval when using lower random rates
+//#define CORA_INVERT_MRR					// invert mrr chain table when using lower random rates
+#define CORA_PKT_BASED					// select packet based adaptation
+#define CORA_AAA_THP_CHANGE				// aaa activated only by expressive thp changes
+
+#define CORA_MAX_STDEV			150
+#define CORA_MIN_STDEV			40
+#define CORA_EWMA_LEVEL			30
+#define CORA_UPDATE_INTERVAL	150		// for packet-based
+#define CORA_RECOVERY_INTERVAL	20		// for packet-based
+
+struct chain_table {
+	unsigned int type;
+	unsigned int count;
+	int bitrate;
+	int rix;
+	u32 att;
+	u32 suc;
+};
+
 
 /* cora_rate is allocated once for each available rate at each cora_sta_info.
  * Information in this struct is private to this rate at this station */ 
@@ -50,6 +69,7 @@ struct cora_rate {
 };
 
 
+
 /* cora_sta_info is allocated once per station. Information in this strcut
  * allows independed rate adaptation for each station */
 struct cora_sta_info {
@@ -58,11 +78,13 @@ struct cora_sta_info {
 	unsigned int max_prob_rate_ndx;	// index of rate with highest probability
 	unsigned int random_rate_ndx;	// random rate index (will be used in the next interval) 
 	unsigned int lowest_rix;		// lowest rate index 
-	unsigned long stats_update;		// last update time (jiffies)
 	unsigned int n_rates;			// number o supported rates 
-
-	/* Rate pointer for each station (created in cora_alloc_sta) */
-	struct cora_rate *r;
+	unsigned long update_counter;	// last update time (time based) or pkt counter (pkt based)
+    unsigned int update_interval; 	// time (or pkts) between cora_update_stats
+	unsigned long up_stats_counter;	// update stats counter
+	
+	struct cora_rate *r;			// rate pointer for each station
+	struct chain_table *t;			// chain table pointer for mrr
 
 #ifdef CONFIG_MAC80211_DEBUGFS
 	struct dentry *dbg_stats;		// debug file pointer 
@@ -79,8 +101,7 @@ struct cora_priv {
 	unsigned int cw_max;		  	// congestion window roof
 	unsigned int max_retry;		  	// default max number o retries before frame discard
 	unsigned int ewma_level;	  	// ewma alpha for ammortize throughput.
-	unsigned int segment_size;	  	// maximum time allowed at the same mrr segment
-	unsigned int update_interval; 	// time between cora_update_stats
+	unsigned int segment_time;	  	// maximum time allowed at the same mrr segment
 };
 
 
