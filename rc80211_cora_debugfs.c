@@ -72,8 +72,9 @@ cora_stats_open (struct inode *inode, struct file *file)
 	p = cs->buf;
 
 	/* Table header */
+	p += sprintf(p, "\n Rate Table:\n");
 	p += sprintf(p, "    | rate | avg_thp | avg_pro | cur_thp | cur_pro | "
-			"succ ( att ) | success | attempts | # used \n");
+			"succ ( atte ) | success | attempts | #used \n");
 
 	/* Table lines */
 	for (i = 0; i < ci->n_rates; i++) {
@@ -97,8 +98,8 @@ cora_stats_open (struct inode *inode, struct file *file)
 
 		p += sprintf (
 				p, 
-				"| %5u.%1u |   %5u | %5u.%1u |   %5u | "
-				"%5u(%5u) |%8llu | %8llu | %6u\n",
+				"| %5u.%1u | %7u | %5u.%1u | %7u "
+				"| %4u ( %4u ) | %7llu | %8llu | %5u\n",
 				avg_tp / 10, avg_tp % 10,
 				avg_prob / 18,
 				cur_tp / 10, cur_tp % 10,
@@ -110,12 +111,55 @@ cora_stats_open (struct inode *inode, struct file *file)
 			);
 	}
 
+	/* Chain table  */
+	p += sprintf(p, "\n MRR Chain Table:\n");
+	p += sprintf(p, " type |  rate | count | success | attempts \n");
+
+	for (i = 0; i < 4; i++) {
+		struct chain_table *ct = &ci->t[i];
+
+		p += sprintf (
+			p, 
+			" %s | %3u%s | %5u | %7llu | %8llu\n",
+			ct->type == 0 ? "rand": ct->type == 1 ? "best" : ct->type == 2 ? "prob" : "lowr", 
+			ct->bitrate / 2, (ct->bitrate & 1 ? ".5" : "  "),
+			ct->count,
+			(unsigned long long) ct->suc,
+			(unsigned long long) ct->att
+		);
+	}
+
 	/* Table footer */
 	p += sprintf(p, "\n COgnitive Rate Adaptation (CORA):\n"
-			"   Number of rates: %2u\n"
-			"   Current Normal Mean: %2u\n"
-		   	"   Current Normal Stdev: %2u.%2u\n",
+			"   Number of rates:      %u\n"
+			"   Recovery Mode:        %s\n"
+			"   Interval based on:    %s  (current interval: %u)\n"
+			"   MRR table inversion:  %s\n"
+			"   AAA trigger type:     %s\n"
+			"   Current Normal Mean:  %u\n"
+		   	"   Current Normal Stdev: %u.%2u\n",
 			ci->n_rates,
+#ifdef CORA_FAST_RECOVERY
+			"ENABLE",
+#else
+			"DISABLE",
+#endif
+#ifdef CORA_PKT_BASED
+			"PACKETS",
+#else
+			"TIME",
+#endif
+			ci->update_interval,
+#ifdef CORA_INVERT_MRR
+			"ENABLE",
+#else
+			"DISABLE",
+#endif
+#ifdef CORA_AAA_THP_CHANGE
+			"THROUGHPUT",
+#else
+			"NORMAL MEAN",
+#endif
 			ci->max_tp_rate_ndx,
 			ci->cur_stdev / 100, ci->cur_stdev % 100
 		);
