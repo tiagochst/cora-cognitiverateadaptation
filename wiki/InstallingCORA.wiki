@@ -13,7 +13,7 @@ cd (path_to_openwrt)/package/mac80211
 
 Replace the Makefile for the one in the repository of this project.
 
-Then, copy the file "950-cora-configure.patche" from this project into de following directory:
+Then, copy the file "910-multiple_rc_algorithms.patch" from this project into de following directory:
 {{{
 (path_to_openwrt)/package/mac80211/patches/
 }}}                   
@@ -24,9 +24,9 @@ make /packages/mac80211/{clean,compile} V=99
 }}}
 
 This command will delete all extrated packages from the {{{build_dir}
-}}, and will extract the original files again. You will face an compile error claiming that {{{rc80211_cora.o}}} can't be build due to lack of source code. Now you have to copy the CORA source code from this project as shown:
+}}, and will extract the original files again. You will face an compile error claiming that {{{rc80211_cora.o}}} can't be build due to lack of source code. Now you have to copy all rc80211_*.c and rc80211_*.h from this project as shown:
 {{{
-cp rc80211_cora.h rc80211_cora.c rc80211_cora_debugfs.c             ./openwrt/build_dir/linux-ar71xx/compat-wireless-2010-10-19/net/mac80211/
+cp rc80211_* ./openwrt/build_dir/linux-ar71xx/compat-wireless-2010-10-19/net/mac80211/
 }}}
 
 Try recompile the package:
@@ -35,6 +35,8 @@ make /packages/mac80211/compile V=99
 }}}
     
 This is probably going to work!
+
+You can choose wich algorithm to use changing CONFIG_MAC80211_RC_DEFAULT and CONFIG_COMPAT_MAC80211_RC_DEFAULT variables in ./openwrt/build_dir/linux-ar71xx/compat-wireless-2010-10-19/config.mk file.
 
 == Installing new packages into RSPro ==
 
